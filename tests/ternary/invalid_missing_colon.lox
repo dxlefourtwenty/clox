@@ -1,0 +1,3 @@
+// expect-status: compile_error
+// expect-substring: Expect ':' after then branch of conditional expression.
+1 ? 2

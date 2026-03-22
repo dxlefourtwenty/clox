@@ -15,6 +15,7 @@ CFLAGS := -std=c17 -g3 -O0 \
 LDFLAGS := -fsanitize=address,undefined
 
 .PHONY: all hardcore-test hardcore-run clean
+.PHONY: lox-test
 
 all: $(TARGET)
 
@@ -22,6 +23,9 @@ hardcore-test: $(HARDCORE_TEST)
 
 hardcore-run: $(HARDCORE_TEST)
 	ASAN_OPTIONS=detect_leaks=0 ./$(HARDCORE_TEST)
+
+lox-test: $(TARGET)
+	./tests/run_lox_tests.sh
 
 $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)

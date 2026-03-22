@@ -1,0 +1,3 @@
+// expect-status: compile_error
+// expect-substring: Expect expression.
+1 ? 2 :
