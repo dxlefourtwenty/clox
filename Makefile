@@ -1,7 +1,7 @@
 CC := gcc
 
 TARGET := main
-SRCS := main.c chunk.c memory.c debug.c value.c
+SRCS := main.c chunk.c memory.c debug.c value.c vm.c
 HARDCORE_TEST := main_hardcore_test
 HARDCORE_TEST_SRCS := main_hardcore.c memory_hardcore.c
 OBJDIR := obj
