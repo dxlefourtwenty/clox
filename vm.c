@@ -40,9 +40,8 @@ static InterpretResult run(void) {
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
 #define BINARY_OP(op) \
     do { \
-      double b = pop(); \
-      double a = pop(); \
-      push(a op b); \
+      vm.stackTop[-2] = vm.stackTop[-2] op vm.stackTop[-1]; \
+      vm.stackTop--; \
     } while (false)
 
   for (;;) {
@@ -68,7 +67,9 @@ static InterpretResult run(void) {
       case OP_SUBTRACT: BINARY_OP(-); break;
       case OP_MULTIPLY: BINARY_OP(*); break;
       case OP_DIVIDE:   BINARY_OP(/); break;
-      case OP_NEGATE:   push(-pop()); break;
+      case OP_NEGATE: 
+        vm.stackTop[-1] = -vm.stackTop[-1];
+        break;
       case OP_RETURN: {
         printValue(pop());
         printf("\n");
