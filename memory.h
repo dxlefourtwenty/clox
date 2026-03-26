@@ -4,6 +4,9 @@
 
 #include "common.h"
 
+#define ALLOCATE(type, count) \
+    (type*)reallocate(NULL, 0, sizeof(type) * (count))
+
 // this macro calculates a new capacity based
 // on a given current capacity
 // this scales on the old size for performance reasons
