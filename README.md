@@ -1,18 +1,15 @@
-# Chapter 19 Question 1 -- Summary of Changes
+# Chapter 18 Question 1 -- Summary of Changes
 
-### object.h
+### compiler.c
 ```
-typedef struct ObjString{
-  Obj obj;
-  int length;
-  char chars[];
-} ObjString;
-```
-
-### object.c
-```
-static ObjString* allocateString(const char* chars, int length) {
-  ObjString* string =
-      (ObjString*)allocateObject(sizeof(ObjString) + (size_t)length + 1,
-                                 OBJ_STRING);
+switch (operatorType) {
+  // ...
+  case TOKEN_PLUS:          emitByte(OP_ADD); break;
+  // change this from OP_SUBTRACT TO OP_NEGATE, OP_ADD
+  case TOKEN_MINUS:         emitBytes(OP_NEGATE, OP_ADD); break;
+  case TOKEN_STAR:          emitByte(OP_MULTIPLY); break;
+  case TOKEN_SLASH:         emitByte(OP_DIVIDE); break;
+  default:
+    return; // Unreachable.
+}
 ```
