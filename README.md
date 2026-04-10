@@ -66,4 +66,25 @@ bool tableDelete(Table* table, Value key) {
   return true;
 }
 
+static uint32_t hashValue(Value value) {
+  switch (value.type) {
+    case VAL_BOOL:
+      return AS_BOOL(value) ? 3u : 1u;
+    case VAL_NIL:
+      return 2u;
+    case VAL_NUMBER: {
+      double number = AS_NUMBER(value);
+      if (number == 0.0) number = 0.0;
+
+      uint64_t bits;
+      memcpy(&bits, &number, sizeof(double));
+      return (uint32_t)(bits ^ (bits >> 32));
+    }
+    case VAL_OBJ:
+      if (IS_STRING(value)) return AS_STRING(value)->hash;
+      return (uint32_t)(uintptr_t)AS_OBJ(value);
+  }
+
+  return 0;
+}
 ```
