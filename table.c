@@ -20,8 +20,8 @@ void freeTable(Table* table) {
 }
 
 static Entry* findEntry(Entry* entries, int capacity,
-                        ObjString* key) {
-  uint32_t index = key->hash % capacity;
+                        Value key) {
+  uint32_t index = hashValue(key) % capacity;
   Entry* tombstone = NULL;
 
   for (;;) {
@@ -34,7 +34,7 @@ static Entry* findEntry(Entry* entries, int capacity,
         // We found a tombstone.
         if (tombstone == NULL) tombstone = entry;
       }
-    } else if (entry->key == key) {
+    } else if (valuesEqual(entry->key, key)) {
       // We found the key.
       return entry;
     }
@@ -56,7 +56,8 @@ bool tableGet(Table* table, ObjString* key, Value* value) {
 static void adjustCapacity(Table* table, int capacity) {
   Entry* entries = ALLOCATE(Entry, capacity);
   for (int i = 0; i < capacity; i++) {
-    entries[i].key = NULL;
+    // changed NULL to NIL_VAL since this creates an empty list
+    entries[i].key = NIL_VAL;
     entries[i].value = NIL_VAL;
   }
 
