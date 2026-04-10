@@ -50,4 +50,20 @@ static void adjustCapacity(Table* table, int capacity) {
     entries[i].value = NIL_VAL;
   }
 // ..
+// ..
+
+bool tableDelete(Table* table, Value key) {
+  if (table->count == 0) return false;
+
+  // Find the entry.
+  Entry* entry = findEntry(table->entries, table->capacity, key);
+  if (entry->key == NULL) return false;
+
+  // use NIL_VAL key with an actual value to make a 
+  // pseudo null value (tombstone)
+  entry->key = NIL_VAL;
+  entry->value = BOOL_VAL(true);
+  return true;
+}
+
 ```
