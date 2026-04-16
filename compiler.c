@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -43,6 +44,7 @@ Chunk* compilingChunk;
 
 static void emitReturn(void);
 static void emitConstant(Value value);
+static uint8_t makeConstant(Value value);
 
 static Chunk* currentChunk() {
   return compilingChunk;
@@ -129,8 +131,18 @@ static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
 
 static uint8_t identifierConstant(Token* name) {
-  return makeConstant(OBJ_VAL(copyString(name->start,
-                                         name->length)));
+  for (int i = 0; i < currentChunk()->constants.count; i++) {
+    Value existing = currentChunk()->constants.values[i];
+    if (!IS_STRING(existing)) continue;
+
+    ObjString* existingStr = AS_STRING(existing);
+    if (existingStr->length == name->length &&
+        memcmp(existingStr->chars, name->start, (size_t)name->length) == 0) {
+      return (uint8_t)i;
+    }
+  }
+
+  return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
 }
 
 static uint8_t parseVariable(const char* errorMessage) {
@@ -228,15 +240,14 @@ ParseRule rules[] = {
   [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
   [TOKEN_BANG]          = {unary,     NULL,   PREC_NONE},
-  [TOKEN_BANG_EQUAL]    = {NULL,     binary,   PREC_NONE},
+  [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
   [TOKEN_GREATER]       = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_IDENTIFIER]    = {variable, NULL, PREC_NONE};
-  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,     NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
