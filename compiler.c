@@ -54,6 +54,8 @@ Parser parser;
 Compiler* current = NULL;
 Chunk* compilingChunk;
 
+#define MAX_SWITCH_CASES 256
+
 static void emitReturn(void);
 static void emitConstant(Value value);
 static uint8_t makeConstant(Value value);
@@ -361,6 +363,7 @@ ParseRule rules[] = {
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_COLON]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -378,7 +381,9 @@ ParseRule rules[] = {
   [TOKEN_STRING]        = {string,     NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
+  [TOKEN_CASE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DEFAULT]       = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
@@ -392,6 +397,7 @@ ParseRule rules[] = {
   [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SWITCH]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
@@ -525,6 +531,84 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
+static void switchStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after value.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before switch cases.");
+
+  int state = 0;
+  int caseEnds[MAX_SWITCH_CASES];
+  int caseCount = 0;
+  int previousCaseSkip = -1;
+
+  while (!check(TOKEN_RIGHT_BRACE) && !check(TOKEN_EOF)) {
+    if (match(TOKEN_CASE) || match(TOKEN_DEFAULT)) {
+      TokenType caseType = parser.previous.type;
+
+      if (state == 2) {
+        error("Can't have another case or default after the default case.");
+      }
+
+      if (state == 1) {
+        if (caseCount == MAX_SWITCH_CASES) {
+          error("Too many case clauses in switch statement.");
+        } else {
+          caseEnds[caseCount++] = emitJump(OP_JUMP);
+        }
+
+        patchJump(previousCaseSkip);
+        emitByte(OP_POP);
+      }
+
+      if (caseType == TOKEN_CASE) {
+        state = 1;
+
+        emitByte(OP_DUP);
+        expression();
+        consume(TOKEN_COLON, "Expect ':' after case value.");
+        emitByte(OP_EQUAL);
+
+        previousCaseSkip = emitJump(OP_JUMP_IF_FALSE);
+        emitByte(OP_POP);
+      } else {
+        state = 2;
+        consume(TOKEN_COLON, "Expect ':' after default.");
+        if (previousCaseSkip != -1) {
+          patchJump(previousCaseSkip);
+          emitByte(OP_POP);
+        }
+        previousCaseSkip = -1;
+      }
+    } else {
+      if (state == 0) {
+        error("Can't have statements before any case.");
+      }
+
+      statement();
+    }
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after switch cases.");
+
+  if (state == 1) {
+    if (caseCount == MAX_SWITCH_CASES) {
+      error("Too many case clauses in switch statement.");
+    } else {
+      caseEnds[caseCount++] = emitJump(OP_JUMP);
+    }
+
+    patchJump(previousCaseSkip);
+    emitByte(OP_POP);
+  }
+
+  emitByte(OP_POP);
+
+  for (int i = 0; i < caseCount; i++) {
+    patchJump(caseEnds[i]);
+  }
+}
+
 static void whileStatement() {
   int loopStart = currentChunk()->count;
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
@@ -551,6 +635,7 @@ static void synchronize() {
       case TOKEN_VAR:
       case TOKEN_FOR:
       case TOKEN_IF:
+      case TOKEN_SWITCH:
       case TOKEN_WHILE:
       case TOKEN_PRINT:
       case TOKEN_RETURN:
@@ -581,6 +666,8 @@ static void statement() {
     forStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement(); 
+  } else if (match(TOKEN_SWITCH)) {
+    switchStatement();
   } else if (match(TOKEN_WHILE)) {
     whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
@@ -637,8 +724,9 @@ bool compile(const char* source, Chunk* chunk) {
   parser.panicMode = false;
 
   advance();
-  expression();
-  consume(TOKEN_EOF, "Expect end of expression.");
+  while (!match(TOKEN_EOF)) {
+    declaration();
+  }
   endCompiler();
   return !parser.hadError;
 }

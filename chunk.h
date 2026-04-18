@@ -15,6 +15,7 @@ typedef enum {
   OP_NIL,
   OP_TRUE,
   OP_FALSE,
+  OP_DUP,
   OP_POP,
   OP_GET_LOCAL,
   OP_SET_LOCAL,
@@ -63,4 +64,3 @@ void writeConstant(Chunk* chunk, Value value, int line);
 int getLine(Chunk* chunk, int instruction);
 
 #endif
-
