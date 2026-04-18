@@ -12,6 +12,7 @@
 VM vm; 
 
 static InterpretResult run(void);
+static uint16_t readSlotLong(void);
 
 static void resetStack() {
   vm.stackTop = vm.stack;
@@ -94,6 +95,12 @@ InterpretResult interpret(const char* source) {
   return result;
 }
 
+static uint16_t readSlotLong(void) {
+  uint16_t low = *vm.ip++;
+  uint16_t high = *vm.ip++;
+  return (uint16_t)(low | (high << 8));
+}
+
 static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
@@ -139,6 +146,16 @@ static InterpretResult run(void) {
       }
       case OP_SET_LOCAL: {
         uint8_t slot = READ_BYTE();
+        vm.stack[slot] = peek(0);
+        break;
+      }
+      case OP_GET_LOCAL_LONG: {
+        uint16_t slot = readSlotLong();
+        push(vm.stack[slot]);
+        break;
+      }
+      case OP_SET_LOCAL_LONG: {
+        uint16_t slot = readSlotLong();
         vm.stack[slot] = peek(0);
         break;
       }

@@ -10,6 +10,8 @@
 #include "debug.h"
 #endif
 
+#define LOCALS_MAX 65536
+
 typedef struct {
   Token current;
   Token previous;
@@ -42,10 +44,11 @@ typedef struct {
 typedef struct {
   Token name;
   int depth;
+  bool isCaptured;
 } Local;
 
 typedef struct {
-  Local locals[UINT8_COUNT];
+  Local locals[LOCALS_MAX];
   int localCount;
   int scopeDepth;
 } Compiler;
@@ -57,6 +60,8 @@ Chunk* compilingChunk;
 static void emitReturn(void);
 static void emitConstant(Value value);
 static uint8_t makeConstant(Value value);
+static void emitShort(uint16_t value);
+static void emitLocalInstruction(uint8_t shortOp, uint8_t longOp, int slot);
 
 static Chunk* currentChunk() {
   return compilingChunk;
@@ -127,6 +132,22 @@ static void emitBytes(uint8_t byte1, uint8_t byte2) {
   emitByte(byte2);
 }
 
+static void emitShort(uint16_t value) {
+  emitByte((uint8_t)(value & 0xff));
+  emitByte((uint8_t)((value >> 8) & 0xff));
+}
+
+static void emitLocalInstruction(uint8_t shortOp, uint8_t longOp, int slot) {
+  if (slot <= UINT8_MAX) {
+    emitBytes(shortOp, (uint8_t)slot);
+  } else if (slot <= UINT16_MAX) {
+    emitByte(longOp);
+    emitShort((uint16_t)slot);
+  } else {
+    error("Too many local variables in function.");
+  }
+}
+
 static void endCompiler() {
   emitReturn();
 #ifdef DEBUG_PRINT_CODE
@@ -182,7 +203,7 @@ static int resolveLocal(Compiler* compiler, Token* name) {
 }
 
 static void addLocal(Token name) {
-  if (current->localCount == UINT8_COUNT) {
+  if (current->localCount == LOCALS_MAX) {
     error("Too many local variables in function.");
     return;
   }
@@ -190,6 +211,7 @@ static void addLocal(Token name) {
   Local* local = &current->locals[current->localCount++];
   local->name = name;
   local->depth = -1;
+  local->isCaptured = false;
 }
 
 static void declareVariable() {
@@ -279,10 +301,14 @@ static void string(bool canAssign) {
 
 static void namedVariable(Token name, bool canAssign) {
   uint8_t getOp, setOp;
+  uint8_t getLongOp = 0, setLongOp = 0;
   int arg = resolveLocal(current, &name);
-  if (arg != -1) {
+  bool isLocal = arg != -1;
+  if (isLocal) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+    getLongOp = OP_GET_LOCAL_LONG;
+    setLongOp = OP_SET_LOCAL_LONG;
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
@@ -291,9 +317,17 @@ static void namedVariable(Token name, bool canAssign) {
 
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
-    emitBytes(setOp, (uint8_t)arg);
+    if (isLocal) {
+      emitLocalInstruction(setOp, setLongOp, arg);
+    } else {
+      emitBytes(setOp, (uint8_t)arg);
+    }
   } else {
-    emitBytes(getOp, (uint8_t)arg);
+    if (isLocal) {
+      emitLocalInstruction(getOp, getLongOp, arg);
+    } else {
+      emitBytes(getOp, (uint8_t)arg);
+    }
   }
 }
 
