@@ -1,17 +1,6 @@
-# Chapter 23 Question 1 -- Direct Code Changes
+# Chapter 23 Question 1 -- Summary of Changes
 
 ### scanner.h
-Before:
-```c
-TOKEN_COMMA, TOKEN_DOT, TOKEN_MINUS, TOKEN_PLUS,
-...
-TOKEN_AND, TOKEN_CLASS, TOKEN_ELSE, TOKEN_FALSE,
-TOKEN_FOR, TOKEN_FUN, TOKEN_IF, TOKEN_NIL, TOKEN_OR,
-TOKEN_PRINT, TOKEN_RETURN, TOKEN_SUPER, TOKEN_THIS,
-TOKEN_TRUE, TOKEN_VAR, TOKEN_WHILE,
-```
-
-After:
 ```c
 TOKEN_COMMA, TOKEN_DOT, TOKEN_COLON, TOKEN_MINUS, TOKEN_PLUS,
 ...
@@ -22,19 +11,6 @@ TOKEN_TRUE, TOKEN_VAR, TOKEN_SWITCH, TOKEN_WHILE,
 ```
 
 ### scanner.c
-Before:
-```c
-case '.': return makeToken(TOKEN_DOT);
-case '-': return makeToken(TOKEN_MINUS);
-
-case 'a': return checkKeyword(1, 2, "nd", TOKEN_AND);
-case 'c': return checkKeyword(1, 4, "lass", TOKEN_CLASS);
-...
-case 'r': return checkKeyword(1, 5, "eturn", TOKEN_RETURN);
-case 's': return checkKeyword(1, 4, "uper", TOKEN_SUPER);
-```
-
-After:
 ```c
 case '.': return makeToken(TOKEN_DOT);
 case ':': return makeToken(TOKEN_COLON);
@@ -63,15 +39,6 @@ case 's':
 ```
 
 ### chunk.h
-Before:
-```c
-OP_NIL,
-OP_TRUE,
-OP_FALSE,
-OP_POP,
-```
-
-After:
 ```c
 OP_NIL,
 OP_TRUE,
@@ -81,52 +48,6 @@ OP_POP,
 ```
 
 ### compiler.c
-Before:
-```c
-Parser parser;
-Compiler* current = NULL;
-Chunk* compilingChunk;
-
-ParseRule rules[] = {
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
-  ...
-  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
-  [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
-  ...
-  [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
-};
-
-static void statement() {
-  if (match(TOKEN_PRINT)) {
-    printStatement();
-  } else if (match(TOKEN_FOR)) {
-    forStatement();
-  } else if (match(TOKEN_IF)) {
-    ifStatement();
-  } else if (match(TOKEN_WHILE)) {
-    whileStatement();
-  } else if (match(TOKEN_LEFT_BRACE)) {
-    beginScope();
-    block();
-    endScope();
-  } else {
-    expressionStatement();
-  }
-}
-
-bool compile(const char* source, Chunk* chunk) {
-  ...
-  advance();
-  expression();
-  consume(TOKEN_EOF, "Expect end of expression.");
-  endCompiler();
-  return !parser.hadError;
-}
-```
-
-After:
 ```c
 Parser parser;
 Compiler* current = NULL;
@@ -252,15 +173,6 @@ bool compile(const char* source, Chunk* chunk) {
 ```
 
 ### debug.c
-Before:
-```c
-case OP_FALSE:
-  return simpleInstruction("OP_FALSE", offset);
-case OP_POP:
-  return simpleInstruction("OP_POP", offset);
-```
-
-After:
 ```c
 case OP_FALSE:
   return simpleInstruction("OP_FALSE", offset);
@@ -271,13 +183,6 @@ case OP_POP:
 ```
 
 ### vm.c
-Before:
-```c
-case OP_FALSE: push(BOOL_VAL(false)); break;
-case OP_POP: pop(); break;
-```
-
-After:
 ```c
 case OP_FALSE: push(BOOL_VAL(false)); break;
 case OP_DUP:
