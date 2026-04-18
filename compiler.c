@@ -42,12 +42,15 @@ typedef struct {
 typedef struct {
   Token name;
   int depth;
+  bool isConst;
 } Local;
 
 typedef struct {
   Local locals[UINT8_COUNT];
   int localCount;
   int scopeDepth;
+  Token constGlobals[UINT8_COUNT];
+  int constGlobalCount;
 } Compiler;
 
 Parser parser;
@@ -190,9 +193,10 @@ static void addLocal(Token name) {
   Local* local = &current->locals[current->localCount++];
   local->name = name;
   local->depth = -1;
+  local->isConst = false;
 }
 
-static void declareVariable() {
+static void declareVariable(bool isConst) {
   if (current->scopeDepth == 0) return;
 
   Token* name = &parser.previous;
@@ -208,12 +212,13 @@ static void declareVariable() {
   }
 
   addLocal(*name);
+  current->locals[current->localCount - 1].isConst = isConst;
 }
 
-static uint8_t parseVariable(const char* errorMessage) {
+static uint8_t parseVariable(const char* errorMessage, bool isConst) {
   consume(TOKEN_IDENTIFIER, errorMessage);
 
-  declareVariable();
+  declareVariable(isConst);
   if (current->scopeDepth > 0) return 0;
 
   return identifierConstant(&parser.previous);
@@ -277,10 +282,31 @@ static void string(bool canAssign) {
                                   parser.previous.length - 2)));
 }
 
+static bool isConstGlobal(Token name) {
+  for (int i = 0; i < current->constGlobalCount; i++) {
+    if (identifiersEqual(&name, &current->constGlobals[i])) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+static void markGlobalConst(Token name) {
+  if (current->constGlobalCount == UINT8_COUNT) {
+    error("Too many global const declarations.");
+    return;
+  }
+
+  current->constGlobals[current->constGlobalCount++] = name;
+}
+
 static void namedVariable(Token name, bool canAssign) {
   uint8_t getOp, setOp;
   int arg = resolveLocal(current, &name);
-  if (arg != -1) {
+  bool isLocal = arg != -1;
+
+  if (isLocal) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
   } else {
@@ -290,6 +316,20 @@ static void namedVariable(Token name, bool canAssign) {
   }
 
   if (canAssign && match(TOKEN_EQUAL)) {
+    if (isLocal) {
+      if (current->locals[arg].isConst) {
+        error("Can't assign to const variable.");
+        expression();
+        return;
+      }
+    } else {
+      if (isConstGlobal(name)) {
+        error("Can't assign to const variable.");
+        expression();
+        return;
+      }
+    }
+
     expression();
     emitBytes(setOp, (uint8_t)arg);
   } else {
@@ -354,6 +394,7 @@ ParseRule rules[] = {
   [TOKEN_TRUE]          = {literal,     NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_CONST]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
 };
@@ -396,17 +437,24 @@ static void block() {
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
-static void varDeclaration() {
-  uint8_t global = parseVariable("Expect variable name.");
+static void varDeclaration(bool isConst) {
+  uint8_t global = parseVariable("Expect variable name.", isConst);
+  Token name = parser.previous;
 
   if (match(TOKEN_EQUAL)) {
     expression();
   } else {
+    if (isConst) {
+      error("Const variables must be initialized.");
+    }
     emitByte(OP_NIL);
   }
   consume(TOKEN_SEMICOLON,
           "Expect ';' after variable declaration.");
 
+  if (isConst && current->scopeDepth == 0) {
+    markGlobalConst(name);
+  }
   defineVariable(global);
 }
 
@@ -431,6 +479,7 @@ static void synchronize() {
       case TOKEN_CLASS:
       case TOKEN_FUN:
       case TOKEN_VAR:
+      case TOKEN_CONST:
       case TOKEN_FOR:
       case TOKEN_IF:
       case TOKEN_WHILE:
@@ -448,7 +497,9 @@ static void synchronize() {
 
 static void declaration() {
   if (match(TOKEN_VAR)) {
-    varDeclaration();
+    varDeclaration(false);
+  } else if (match(TOKEN_CONST)) {
+    varDeclaration(true);
   } else {
     statement();
   }
@@ -489,6 +540,7 @@ static void emitConstant(Value value) {
 static void initCompiler(Compiler* compiler) {
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
+  compiler->constGlobalCount = 0;
   current = compiler;
 }
 
@@ -501,8 +553,9 @@ bool compile(const char* source, Chunk* chunk) {
   parser.panicMode = false;
 
   advance();
-  expression();
-  consume(TOKEN_EOF, "Expect end of expression.");
+  while (!match(TOKEN_EOF)) {
+    declaration();
+  }
   endCompiler();
   return !parser.hadError;
 }
