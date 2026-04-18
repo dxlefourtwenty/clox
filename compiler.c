@@ -48,6 +48,8 @@ typedef struct {
   Local locals[UINT8_COUNT];
   int localCount;
   int scopeDepth;
+  int innermostLoopStart;
+  int innermostLoopScopeDepth;
 } Compiler;
 
 Parser parser;
@@ -379,6 +381,7 @@ ParseRule rules[] = {
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_CONTINUE]      = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
@@ -455,10 +458,27 @@ static void expressionStatement() {
   emitByte(OP_POP);
 }
 
+static void continueStatement() {
+  if (current->innermostLoopStart == -1) {
+    error("Can't use 'continue' outside of a loop.");
+    return;
+  }
+
+  consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
+
+  for (int i = current->localCount - 1; i >= 0; i--) {
+    if (current->locals[i].depth <= current->innermostLoopScopeDepth) {
+      break;
+    }
+    emitByte(OP_POP);
+  }
+
+  emitLoop(current->innermostLoopStart);
+}
+
 static void forStatement() {
   beginScope();
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
-  consume(TOKEN_SEMICOLON, "Expect ';'.");
   if (match(TOKEN_SEMICOLON)) {
     // No initializer.
   } else if (match(TOKEN_VAR)) {
@@ -467,8 +487,14 @@ static void forStatement() {
     expressionStatement();
   }
 
+  int surroundingLoopStart = current->innermostLoopStart;
+  int surroundingLoopScopeDepth = current->innermostLoopScopeDepth;
+
   int loopStart = currentChunk()->count;
   int exitJump = -1;
+  current->innermostLoopStart = loopStart;
+  current->innermostLoopScopeDepth = current->scopeDepth;
+
   if (!match(TOKEN_SEMICOLON)) {
     expression();
     consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.");
@@ -487,11 +513,15 @@ static void forStatement() {
 
     emitLoop(loopStart);
     loopStart = incrementStart;
+    current->innermostLoopStart = incrementStart;
     patchJump(bodyJump);
   }
 
   statement();
   emitLoop(loopStart);
+
+  current->innermostLoopStart = surroundingLoopStart;
+  current->innermostLoopScopeDepth = surroundingLoopScopeDepth;
 
   if (exitJump != -1) {
     patchJump(exitJump);
@@ -527,6 +557,12 @@ static void printStatement() {
 
 static void whileStatement() {
   int loopStart = currentChunk()->count;
+  int surroundingLoopStart = current->innermostLoopStart;
+  int surroundingLoopScopeDepth = current->innermostLoopScopeDepth;
+
+  current->innermostLoopStart = loopStart;
+  current->innermostLoopScopeDepth = current->scopeDepth;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
@@ -535,6 +571,9 @@ static void whileStatement() {
   emitByte(OP_POP);
   statement();
   emitLoop(loopStart);
+
+  current->innermostLoopStart = surroundingLoopStart;
+  current->innermostLoopScopeDepth = surroundingLoopScopeDepth;
 
   patchJump(exitJump);
   emitByte(OP_POP);
@@ -554,6 +593,7 @@ static void synchronize() {
       case TOKEN_WHILE:
       case TOKEN_PRINT:
       case TOKEN_RETURN:
+      case TOKEN_CONTINUE:
         return;
 
       default:
@@ -583,6 +623,8 @@ static void statement() {
     ifStatement(); 
   } else if (match(TOKEN_WHILE)) {
     whileStatement();
+  } else if (match(TOKEN_CONTINUE)) {
+    continueStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
@@ -625,6 +667,8 @@ static void patchJump(int offset) {
 static void initCompiler(Compiler* compiler) {
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
+  compiler->innermostLoopStart = -1;
+  compiler->innermostLoopScopeDepth = 0;
   current = compiler;
 }
 
@@ -637,8 +681,9 @@ bool compile(const char* source, Chunk* chunk) {
   parser.panicMode = false;
 
   advance();
-  expression();
-  consume(TOKEN_EOF, "Expect end of expression.");
+  while (!match(TOKEN_EOF)) {
+    declaration();
+  }
   endCompiler();
   return !parser.hadError;
 }
