@@ -12,7 +12,7 @@ CFLAGS := -std=c17 -g3 -O0 \
 	-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wformat=2 \
 	-fdiagnostics-color=always -fdiagnostics-show-option \
 	-fno-omit-frame-pointer -fsanitize=address,undefined
-LDFLAGS := -fsanitize=address,undefined
+LDFLAGS := -fsanitize=address,undefined -lm
 
 .PHONY: all run hardcore-test hardcore-run clean
 
