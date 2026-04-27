@@ -647,7 +647,9 @@ static void forStatement() {
     patchJump(bodyJump);
   }
 
+  beginScope();
   statement();
+  endScope();
   emitLoop(loopStart);
 
   if (exitJump != -1) {
