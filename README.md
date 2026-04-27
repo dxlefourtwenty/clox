@@ -1,7 +1,7 @@
 # Chapter 24 Question 1 -- Summary of Changes
 
 ### vm.c
-```
+```c
   register uint8_t* ip = frame->ip;
 
 // ...
