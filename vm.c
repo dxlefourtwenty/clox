@@ -143,6 +143,11 @@ static bool callValue(Value callee, int argCount) {
     switch (OBJ_TYPE(callee)) {
       case OBJ_CLOSURE:
         return call(AS_CLOSURE(callee), argCount);
+      case OBJ_FUNCTION: {
+        ObjFunction* function = AS_FUNCTION(callee);
+        ObjClosure* temp = newClosure(function);
+        return call(temp, argCount);
+      }
       case OBJ_NATIVE: {
         NativeFn native = AS_NATIVE(callee);
         Value result = native(argCount, vm.stackTop - argCount);
@@ -182,10 +187,14 @@ InterpretResult interpret(const char* source) {
   if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
   push(OBJ_VAL(function));
-  ObjClosure* closure = newClosure(function);
-  pop();
-  push(OBJ_VAL(closure));
-  call(closure, 0);
+  if (function->upvalueCount > 0) {
+    ObjClosure* closure = newClosure(function);
+    pop();
+    push(OBJ_VAL(closure));
+    call(closure, 0);
+  } else {
+    callValue(OBJ_VAL(function), 0);
+  }
 
   return run();
 }
@@ -366,6 +375,11 @@ static InterpretResult run(void) {
       }
       case OP_CLOSURE: {
         ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+        if (function->upvalueCount == 0) {
+          push(OBJ_VAL(function));
+          break;
+        }
+
         ObjClosure* closure = newClosure(function);
         push(OBJ_VAL(closure));
         for (int i = 0; i < closure->upvalueCount; i++) {
