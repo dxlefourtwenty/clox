@@ -12,10 +12,46 @@
 
 VM vm; 
 
+static void runtimeError(const char* format, ...);
+
 static Value clockNative(int argCount, Value* args) {
   (void)argCount;
   (void)args;
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+static Value typeNative(int argCount, Value* args) {
+  if (argCount != 1) {
+    runtimeError("type() expects 1 argument.");
+    return NIL_VAL;
+  }
+
+  Value value = args[0];
+  if (IS_NUMBER(value)) {
+    return OBJ_VAL(copyString("number", 6));
+  }
+
+  if (IS_BOOL(value)) {
+    return OBJ_VAL(copyString("bool", 4));
+  }
+
+  if (IS_NIL(value)) {
+    return OBJ_VAL(copyString("nil", 3));
+  }
+
+  if (IS_STRING(value)) {
+    return OBJ_VAL(copyString("string", 6));
+  }
+
+  if (IS_FUNCTION(value)) {
+    return OBJ_VAL(copyString("function", 8));
+  }
+
+  if (IS_NATIVE(value)) {
+    return OBJ_VAL(copyString("native", 6));
+  }
+
+  return OBJ_VAL(copyString("unknown", 7));
 }
 
 static InterpretResult run(void);
@@ -63,6 +99,7 @@ void initVM() {
   initTable(&vm.strings);
 
   defineNative("clock", clockNative);
+  defineNative("type", typeNative);
 }
 
 void freeVM() {
