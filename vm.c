@@ -22,6 +22,10 @@ static Value clockNative(int argCount, Value* args) {
 static InterpretResult run(void);
 
 static void resetStack() {
+  while (vm.stackTop != NULL && vm.stackTop > vm.stack) {
+    pop();
+  }
+
   vm.stackTop = vm.stack;
   vm.frameCount = 0;
   vm.openUpvalues = NULL;
@@ -73,6 +77,7 @@ void initVM() {
 }
 
 void freeVM() {
+  beginFreeObjects();
   freeTable(&vm.globals);
   freeTable(&vm.strings);
   freeObjects();
@@ -80,13 +85,22 @@ void freeVM() {
 }
 
 void push(Value value) {
+  incrementValue(value);
   *vm.stackTop = value;
   vm.stackTop++;
 }
 
 Value pop() {
   vm.stackTop--;
-  return *vm.stackTop;
+  Value value = *vm.stackTop;
+  decrementValue(value);
+  return value;
+}
+
+static void setSlot(Value* slot, Value value) {
+  incrementValue(value);
+  decrementValue(*slot);
+  *slot = value;
 }
 
 static Value peek(int distance) {
@@ -121,6 +135,7 @@ static void closeUpvalues(Value* last) {
   while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
     ObjUpvalue* upvalue = vm.openUpvalues;
     upvalue->closed = *upvalue->location;
+    incrementValue(upvalue->closed);
     upvalue->location = &upvalue->closed;
     vm.openUpvalues = upvalue->next;
   }
@@ -153,7 +168,9 @@ static bool callValue(Value callee, int argCount) {
       case OBJ_NATIVE: {
         NativeFn native = AS_NATIVE(callee);
         Value result = native(argCount, vm.stackTop - argCount);
-        vm.stackTop -= argCount + 1;
+        for (int i = 0; i < argCount + 1; i++) {
+          pop();
+        }
         push(result);
         return true;
       }
@@ -171,8 +188,8 @@ static bool isFalsey(Value value) {
 }
 
 static void concatenate() {
-  ObjString* b = AS_STRING(pop());
-  ObjString* a = AS_STRING(pop());
+  ObjString* b = AS_STRING(peek(0));
+  ObjString* a = AS_STRING(peek(1));
 
   int length = a->length + b->length;
   char* chars = ALLOCATE(char, length + 1);
@@ -181,6 +198,8 @@ static void concatenate() {
   chars[length] = '\0';
 
   ObjString* result = takeString(chars, length);
+  pop();
+  pop();
   push(OBJ_VAL(result));
 }
 
@@ -262,7 +281,7 @@ static InterpretResult run(void) {
       }
       case OP_SET_LOCAL: {
         uint8_t slot = READ_BYTE();
-        frame->slots[slot] = peek(0);
+        setSlot(&frame->slots[slot], peek(0));
         break;
       }
       case OP_GET_GLOBAL: {
@@ -297,7 +316,7 @@ static InterpretResult run(void) {
       }
       case OP_SET_UPVALUE: {
         uint8_t slot = READ_BYTE();
-        *frame->closure->upvalues[slot]->location = peek(0);
+        setSlot(frame->closure->upvalues[slot]->location, peek(0));
         break;
       }
       case OP_EQUAL: {
@@ -383,6 +402,7 @@ static InterpretResult run(void) {
           } else {
             closure->upvalues[i] = frame->closure->upvalues[index];
           }
+          incRef((Obj*)closure->upvalues[i]);
         }
         break;
       }

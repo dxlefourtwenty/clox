@@ -30,7 +30,13 @@
   reallocate(pointer, sizeof(type) * (oldCount), 0)
 
 void* reallocate(void* pointer, size_t oldSize, size_t newSize);
+void beginFreeObjects();
 void freeObjects();
+void incRef(Obj* object);
+void decref(Obj* object);
+void incrementValue(Value value);
+void decrementValue(Value value);
+void decrementArray(ValueArray* array);
 void markObject(Obj* object);
 void markValue(Value value);
 void collectGarbage();

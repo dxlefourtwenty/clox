@@ -15,6 +15,14 @@ void initTable(Table* table) {
 }
 
 void freeTable(Table* table) {
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    if (entry->key != NULL) {
+      decref((Obj*)entry->key);
+      decrementValue(entry->value);
+    }
+  }
+
   FREE_ARRAY(Entry, table->entries, table->capacity);
   initTable(table);
 }
@@ -85,9 +93,15 @@ bool tableSet(Table* table, ObjString* key, Value value) {
   Entry* entry = findEntry(table->entries, table->capacity, key);
   bool isNewKey = entry->key == NULL;
   if (isNewKey && IS_NIL(entry->value)) table->count++;
+  if (isNewKey) {
+    incRef((Obj*)key);
+  } else {
+    decrementValue(entry->value);
+  }
 
   entry->key = key;
   entry->value = value;
+  incrementValue(value);
   return isNewKey;
 }
 
@@ -99,6 +113,8 @@ bool tableDelete(Table* table, ObjString* key) {
   if (entry->key == NULL) return false;
 
   // Place a tombstone in the entry.
+  decref((Obj*)entry->key);
+  decrementValue(entry->value);
   entry->key = NULL;
   entry->value = BOOL_VAL(true);
   return true;

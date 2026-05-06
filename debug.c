@@ -62,7 +62,7 @@ static int closureInstruction(const char* name, Chunk* chunk, int offset) {
   printf("\n");
 
   ObjFunction* function = AS_FUNCTION(chunk->constants.values[constant]);
-  for (int j = 0; j < function->upvalueCount; j++) {
+  for (int j = 0; j < function->upvalueCount && offset + 1 < chunk->count; j++) {
     int isLocal = chunk->code[offset++];
     int index = chunk->code[offset++];
     printf("%04d      |                     %s %d\n", offset - 2,

@@ -10,6 +10,7 @@
 #define GC_HEAP_GROW_FACTOR 2
 
 static void freeObject(Obj* object);
+static bool isShuttingDown = false;
 
 // the two size arguments control which operation to perform 
 //
@@ -100,7 +101,7 @@ static void sweep() {
   Obj* previous = NULL;
   Obj* object = vm.objects;
   while (object != NULL) {
-    if (object->isMarked) {
+    if (object->refCount > 0) {
       object->isMarked = false;
       previous = object;
       object = object->next;
@@ -115,6 +116,31 @@ static void sweep() {
 
       freeObject(unreached);
     }
+  }
+}
+
+void incRef(Obj* object) {
+  if (object == NULL) return;
+  object->refCount++;
+}
+
+void decref(Obj* object) {
+  if (object == NULL) return;
+  if (isShuttingDown) return;
+  object->refCount--;
+}
+
+void incrementValue(Value value) {
+  if (IS_OBJ(value)) incRef(AS_OBJ(value));
+}
+
+void decrementValue(Value value) {
+  if (IS_OBJ(value)) decref(AS_OBJ(value));
+}
+
+void decrementArray(ValueArray* array) {
+  for (int i = 0; i < array->count; i++) {
+    decrementValue(array->values[i]);
   }
 }
 
@@ -150,12 +176,17 @@ static void freeObject(Obj* object) {
   switch (object->type) {
     case OBJ_CLOSURE: {
       ObjClosure* closure = (ObjClosure*)object;
+      decref((Obj*)closure->function);
+      for (int i = 0; i < closure->upvalueCount; i++) {
+        decref((Obj*)closure->upvalues[i]);
+      }
       FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
       FREE(ObjClosure, object);
       break;
     }
     case OBJ_FUNCTION: {
       ObjFunction* function = (ObjFunction*)object;
+      decref((Obj*)function->name);
       freeChunk(&function->chunk);
       FREE(ObjFunction, object);
       break;
@@ -170,16 +201,22 @@ static void freeObject(Obj* object) {
       break;
     }
     case OBJ_UPVALUE:
+      decrementValue(((ObjUpvalue*)object)->closed);
       FREE(ObjUpvalue, object);
       break;
   }
 }
 
 void freeObjects() {
+  isShuttingDown = true;
   Obj* object = vm.objects;
   while (object != NULL) {
     Obj* next = object->next;
     freeObject(object);
     object = next;
   }
+}
+
+void beginFreeObjects() {
+  isShuttingDown = true;
 }

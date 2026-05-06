@@ -17,10 +17,12 @@ void writeValueArray(ValueArray* array, Value value) {
   }
 
   array->values[array->count] = value;
+  incrementValue(value);
   array->count++;
 }
 
 void freeValueArray(ValueArray* array) {
+  decrementArray(array);
   FREE_ARRAY(Value, array->values, array->capacity);
   initValueArray(array);
 }

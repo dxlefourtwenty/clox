@@ -185,6 +185,7 @@ static ObjFunction* endCompiler() {
 #endif
 
   current = current->enclosing;
+  decref((Obj*)function);
   return function;
 }
 
@@ -800,10 +801,12 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
   compiler->function = newFunction();
+  incRef((Obj*)compiler->function);
   current = compiler;
 
   if (type != TYPE_SCRIPT) {
     current->function->name = copyString(parser.previous.start, parser.previous.length);
+    incRef((Obj*)current->function->name);
   }
 
   Local* local = &current->locals[current->localCount++];
