@@ -83,6 +83,7 @@ static void blackenObject(Obj* object) {
     case OBJ_NATIVE:
       break;
     case OBJ_STRING:
+    case OBJ_SHORT_STRING:
       break;
     case OBJ_UPVALUE:
       markValue(((ObjUpvalue*)object)->closed);
@@ -186,6 +187,9 @@ static void freeObject(Obj* object) {
       FREE(ObjString, object);
       break;
     }
+    case OBJ_SHORT_STRING:
+      FREE(ObjShortString, object);
+      break;
     case OBJ_UPVALUE:
       FREE(ObjUpvalue, object);
       break;

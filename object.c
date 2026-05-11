@@ -89,6 +89,19 @@ static ObjString* allocateString(char* chars, int length,
   return string;
 }
 
+static ObjString* allocateShortString(const char* chars, int length,
+                                      uint32_t hash) {
+  ObjShortString* string = ALLOCATE_OBJ(ObjShortString, OBJ_SHORT_STRING);
+  string->length = length;
+  memcpy(string->chars, chars, (size_t)length);
+  string->chars[length] = '\0';
+  string->hash = hash;
+  push(OBJ_VAL(string));
+  tableSet(&vm.strings, (ObjString*)string, NIL_VAL);
+  pop();
+  return (ObjString*)string;
+}
+
 static uint32_t hashString(const char* key, int length) {
   uint32_t hash = 2166136261u;
   for (int i = 0; i < length; i++) {
@@ -107,6 +120,12 @@ ObjString* takeString(char* chars, int length) {
     return interned;
   }
 
+  if (length <= SHORT_STRING_MAX) {
+    ObjString* string = allocateShortString(chars, length, hash);
+    FREE_ARRAY(char, chars, length + 1);
+    return string;
+  }
+
   return allocateString(chars, length, hash);
 }
 
@@ -115,6 +134,10 @@ ObjString* copyString(const char* chars, int length) {
   ObjString* interned = tableFindString(&vm.strings, chars, length,
                                         hash);
   if (interned != NULL) return interned;
+
+  if (length <= SHORT_STRING_MAX) {
+    return allocateShortString(chars, length, hash);
+  }
 
   char* heapChars = ALLOCATE(char, length + 1);
   memcpy(heapChars, chars, length);
@@ -127,7 +150,7 @@ static void printFunction(ObjFunction* function) {
     printf("<script>");
     return;
   }
-  printf("<fn %s>", function->name->chars);
+  printf("<fn %s>", stringChars(function->name));
 }
 
 void printObject(Value value) {
@@ -142,16 +165,17 @@ void printObject(Value value) {
       printf("<native fn>");
       break;
     case OBJ_STRING:
+    case OBJ_SHORT_STRING:
       printf("%s", AS_CSTRING(value));
       break;
     case OBJ_UPVALUE:
       printf("upvalue");
       break;
     case OBJ_CLASS:
-      printf("%s", AS_CLASS(value)->name->chars);
+      printf("%s", stringChars(AS_CLASS(value)->name));
       break;
     case OBJ_INSTANCE:
-      printf("%s instance", AS_INSTANCE(value)->klass->name->chars);
+      printf("%s instance", stringChars(AS_INSTANCE(value)->klass->name));
       break;
     case OBJ_BOUND_METHOD:
       printFunction(AS_BOUND_METHOD(value)->method->function);

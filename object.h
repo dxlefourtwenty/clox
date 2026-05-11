@@ -11,7 +11,8 @@
 #define IS_FUNCTION(value)     isObjType(value, OBJ_FUNCTION)
 #define IS_CLOSURE(value)      isObjType(value, OBJ_CLOSURE)
 #define IS_NATIVE(value)       isObjType(value, OBJ_NATIVE)
-#define IS_STRING(value)       isObjType(value, OBJ_STRING)
+#define IS_STRING(value) \
+    (isObjType(value, OBJ_STRING) || isObjType(value, OBJ_SHORT_STRING))
 #define IS_UPVALUE(value)      isObjType(value, OBJ_UPVALUE)
 #define IS_CLASS(value)        isObjType(value, OBJ_CLASS)
 #define IS_INSTANCE(value)     isObjType(value, OBJ_INSTANCE)
@@ -22,7 +23,7 @@
 #define AS_NATIVE(value) \
     (((ObjNative*)AS_OBJ(value))->function)
 #define AS_STRING(value)       ((ObjString*)AS_OBJ(value))
-#define AS_CSTRING(value)      (((ObjString*)AS_OBJ(value))->chars)
+#define AS_CSTRING(value)      (stringChars(AS_STRING(value)))
 #define AS_UPVALUE(value)      ((ObjUpvalue*)AS_OBJ(value))
 #define AS_CLASS(value)        ((ObjClass*)AS_OBJ(value))
 #define AS_INSTANCE(value)     ((ObjInstance*)AS_OBJ(value))
@@ -33,6 +34,7 @@ typedef enum {
   OBJ_CLOSURE,
   OBJ_NATIVE,
   OBJ_STRING,
+  OBJ_SHORT_STRING,
   OBJ_UPVALUE,
   OBJ_CLASS,
   OBJ_INSTANCE,
@@ -99,6 +101,15 @@ struct ObjString {
   uint32_t hash;
 };
 
+#define SHORT_STRING_MAX 7
+
+typedef struct {
+  Obj obj;
+  int length;
+  char chars[SHORT_STRING_MAX + 1];
+  uint32_t hash;
+} ObjShortString;
+
 ObjFunction* newFunction();
 ObjClosure* newClosure(ObjFunction* function);
 ObjNative* newNative(NativeFn function);
@@ -109,6 +120,27 @@ ObjBoundMethod* newBoundMethod(Value receiver, ObjClosure* method);
 ObjString* takeString(char* chars, int length);
 ObjString* copyString(const char* chars, int length);
 void printObject(Value value);
+
+static inline int stringLength(ObjString* string) {
+  if (string->obj.type == OBJ_SHORT_STRING) {
+    return ((ObjShortString*)string)->length;
+  }
+  return string->length;
+}
+
+static inline const char* stringChars(ObjString* string) {
+  if (string->obj.type == OBJ_SHORT_STRING) {
+    return ((ObjShortString*)string)->chars;
+  }
+  return string->chars;
+}
+
+static inline uint32_t stringHash(ObjString* string) {
+  if (string->obj.type == OBJ_SHORT_STRING) {
+    return ((ObjShortString*)string)->hash;
+  }
+  return string->hash;
+}
 
 static inline bool isObjType(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;

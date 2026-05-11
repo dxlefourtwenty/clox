@@ -43,7 +43,7 @@ static void runtimeError(const char* format, ...) {
     if (function->name == NULL) {
       fprintf(stderr, "script\n");
     } else {
-      fprintf(stderr, "%s()\n", function->name->chars);
+      fprintf(stderr, "%s()\n", stringChars(function->name));
     }
   }
 
@@ -151,7 +151,7 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool bindMethod(ObjClass* klass, ObjString* name) {
   Value method;
   if (!tableGet(&klass->methods, name, &method)) {
-    runtimeError("Undefined property '%s'.", name->chars);
+    runtimeError("Undefined property '%s'.", stringChars(name));
     return false;
   }
 
@@ -164,7 +164,7 @@ static bool bindMethod(ObjClass* klass, ObjString* name) {
 static bool invokeFromClass(ObjClass* klass, ObjString* name, int argCount) {
   Value method;
   if (!tableGet(&klass->methods, name, &method)) {
-    runtimeError("Undefined property '%s'.", name->chars);
+    runtimeError("Undefined property '%s'.", stringChars(name));
     return false;
   }
 
@@ -244,10 +244,12 @@ static void concatenate() {
   ObjString* b = AS_STRING(pop());
   ObjString* a = AS_STRING(pop());
 
-  int length = a->length + b->length;
+  int aLength = stringLength(a);
+  int bLength = stringLength(b);
+  int length = aLength + bLength;
   char* chars = ALLOCATE(char, length + 1);
-  memcpy(chars, a->chars, a->length);
-  memcpy(chars + a->length, b->chars, b->length);
+  memcpy(chars, stringChars(a), (size_t)aLength);
+  memcpy(chars + aLength, stringChars(b), (size_t)bLength);
   chars[length] = '\0';
 
   ObjString* result = takeString(chars, length);
@@ -339,7 +341,7 @@ static InterpretResult run(void) {
         ObjString* name = READ_STRING();
         Value value;
         if (!tableGet(&vm.globals, name, &value)) {
-          runtimeError("Undefined variable '%s'.", name->chars);
+          runtimeError("Undefined variable '%s'.", stringChars(name));
           return INTERPRET_RUNTIME_ERROR;
         }
         push(value);
@@ -355,7 +357,7 @@ static InterpretResult run(void) {
         ObjString* name = READ_STRING();
         if (tableSet(&vm.globals, name, peek(0))) {
           tableDelete(&vm.globals, name);
-          runtimeError("Undefined variable '%s'.", name->chars);
+          runtimeError("Undefined variable '%s'.", stringChars(name));
           return INTERPRET_RUNTIME_ERROR;
         }
         break;
