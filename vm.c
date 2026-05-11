@@ -232,8 +232,59 @@ static bool callValue(Value callee, int argCount) {
 static void defineMethod(ObjString* name) {
   Value method = peek(0);
   ObjClass* klass = AS_CLASS(peek(1));
-  tableSet(&klass->methods, name, method);
+  AS_CLOSURE(method)->owner = klass;
+  tableSet(&klass->ownMethods, name, method);
+  if (!tableGet(&klass->methods, name, &method)) {
+    tableSet(&klass->methods, name, peek(0));
+  }
   pop();
+}
+
+static bool inner(ObjString* name, int argCount) {
+  Value receiver = peek(argCount);
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError("Only instances have inner methods.");
+    return false;
+  }
+
+  ObjClass* owner = vm.frames[vm.frameCount - 1].closure->owner;
+  if (owner == NULL) {
+    runtimeError("Can't use 'inner' outside of a method.");
+    return false;
+  }
+
+  int pathCount = 0;
+  int pathCapacity = 0;
+  ObjClass** path = NULL;
+  for (ObjClass* klass = AS_INSTANCE(receiver)->klass;
+       klass != NULL && klass != owner;
+       klass = klass->superclass) {
+    if (pathCapacity < pathCount + 1) {
+      int oldCapacity = pathCapacity;
+      pathCapacity = GROW_CAPACITY(pathCapacity);
+      path = GROW_ARRAY(ObjClass*, path, oldCapacity, pathCapacity);
+    }
+    path[pathCount++] = klass;
+  }
+
+  Value method;
+  bool found = false;
+  for (int i = pathCount - 1; i >= 0; i--) {
+    if (tableGet(&path[i]->ownMethods, name, &method)) {
+      found = true;
+      break;
+    }
+  }
+
+  FREE_ARRAY(ObjClass*, path, pathCapacity);
+
+  if (!found) {
+    vm.stackTop -= argCount;
+    vm.stackTop[-1] = NIL_VAL;
+    return true;
+  }
+
+  return call(AS_CLOSURE(method), argCount);
 }
 
 static bool isFalsey(Value value) {
@@ -492,6 +543,15 @@ static InterpretResult run(void) {
         frame = &vm.frames[vm.frameCount - 1];
         break;
       }
+      case OP_INNER: {
+        ObjString* method = READ_STRING();
+        int argCount = READ_BYTE();
+        if (!inner(method, argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
+      }
       case OP_SUPER_INVOKE: {
         ObjString* method = READ_STRING();
         int argCount = READ_BYTE();
@@ -528,6 +588,7 @@ static InterpretResult run(void) {
         }
 
         ObjClass* subclass = AS_CLASS(peek(0));
+        subclass->superclass = AS_CLASS(superclass);
         tableAddAll(&AS_CLASS(superclass)->methods, &subclass->methods);
         pop();
         break;

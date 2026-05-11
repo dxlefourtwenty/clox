@@ -301,6 +301,22 @@ static void grouping(bool canAssign) {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
+static uint8_t argumentList() {
+  uint8_t argCount = 0;
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      expression();
+      if (argCount == 255) {
+        error("Can't have more than 255 arguments.");
+      }
+      argCount++;
+    } while (match(TOKEN_COMMA));
+  }
+
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+  return argCount;
+}
+
 static void number(bool canAssign) {
   (void)canAssign;
   double value = strtod(parser.previous.start, NULL);
@@ -525,6 +541,24 @@ static void this_(bool canAssign) {
   variable(canAssign);
 }
 
+static void inner_(bool canAssign) {
+  (void)canAssign;
+  if (currentClass == NULL ||
+      (current->type != TYPE_METHOD && current->type != TYPE_INITIALIZER)) {
+    error("Can't use 'inner' outside of a method.");
+    return;
+  }
+
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'inner'.");
+  emitBytes(OP_GET_LOCAL, 0);
+  uint8_t argCount = argumentList();
+
+  ObjString* name = current->function->name;
+  uint8_t nameConstant = makeConstant(OBJ_VAL(name));
+  emitBytes(OP_INNER, nameConstant);
+  emitByte(argCount);
+}
+
 static Token syntheticToken(const char* text) {
   Token token;
   token.start = text;
@@ -594,6 +628,7 @@ ParseRule rules[] = {
   [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
   [TOKEN_FUN] = {NULL, NULL, PREC_NONE},
   [TOKEN_IF] = {NULL, NULL, PREC_NONE},
+  [TOKEN_INNER] = {inner_, NULL, PREC_NONE},
   [TOKEN_NIL] = {literal, NULL, PREC_NONE},
   [TOKEN_OR] = {NULL, or_, PREC_OR},
   [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},

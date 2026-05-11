@@ -39,6 +39,8 @@ typedef enum {
   OBJ_BOUND_METHOD,
 } ObjType;
 
+typedef struct ObjClass ObjClass;
+
 struct Obj {
   ObjType type;
   bool isMarked;
@@ -65,6 +67,7 @@ typedef struct {
   ObjFunction* function;
   ObjUpvalue** upvalues;
   int upvalueCount;
+  ObjClass* owner;
 } ObjClosure;
 
 typedef Value (*NativeFn)(int argCount, Value* args);
@@ -74,11 +77,13 @@ typedef struct {
   NativeFn function;
 } ObjNative;
 
-typedef struct {
+struct ObjClass {
   Obj obj;
   ObjString* name;
   Table methods;
-} ObjClass;
+  Table ownMethods;
+  ObjClass* superclass;
+};
 
 typedef struct {
   Obj obj;

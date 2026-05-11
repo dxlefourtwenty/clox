@@ -39,6 +39,7 @@ ObjClosure* newClosure(ObjFunction* function) {
   closure->function = function;
   closure->upvalues = upvalues;
   closure->upvalueCount = function->upvalueCount;
+  closure->owner = NULL;
   return closure;
 }
 
@@ -52,6 +53,8 @@ ObjClass* newClass(ObjString* name) {
   ObjClass* klass = ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
   klass->name = name;
   initTable(&klass->methods);
+  initTable(&klass->ownMethods);
+  klass->superclass = NULL;
   return klass;
 }
 

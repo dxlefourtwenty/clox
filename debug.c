@@ -148,6 +148,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return byteInstruction("OP_CALL", chunk, offset);
     case OP_INVOKE:
       return invokeInstruction("OP_INVOKE", chunk, offset);
+    case OP_INNER:
+      return invokeInstruction("OP_INNER", chunk, offset);
     case OP_SUPER_INVOKE:
       return invokeInstruction("OP_SUPER_INVOKE", chunk, offset);
     case OP_CLOSURE:

@@ -72,6 +72,7 @@ static void blackenObject(Obj* object) {
       for (int i = 0; i < closure->upvalueCount; i++) {
         markObject((Obj*)closure->upvalues[i]);
       }
+      markObject((Obj*)closure->owner);
       break;
     }
     case OBJ_FUNCTION: {
@@ -90,6 +91,8 @@ static void blackenObject(Obj* object) {
     case OBJ_CLASS:
       markObject((Obj*)((ObjClass*)object)->name);
       markTable(&((ObjClass*)object)->methods);
+      markTable(&((ObjClass*)object)->ownMethods);
+      markObject((Obj*)((ObjClass*)object)->superclass);
       break;
     case OBJ_INSTANCE: {
       ObjInstance* instance = (ObjInstance*)object;
@@ -191,6 +194,7 @@ static void freeObject(Obj* object) {
       break;
     case OBJ_CLASS:
       freeTable(&((ObjClass*)object)->methods);
+      freeTable(&((ObjClass*)object)->ownMethods);
       FREE(ObjClass, object);
       break;
     case OBJ_INSTANCE: {
