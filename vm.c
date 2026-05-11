@@ -284,8 +284,7 @@ static InterpretResult run(void) {
       return INTERPRET_RUNTIME_ERROR; \
     } \
     double b = AS_NUMBER(pop()); \
-    double a = AS_NUMBER(pop()); \
-    push(valueType(a op b)); \
+    vm.stackTop[-1] = valueType(AS_NUMBER(vm.stackTop[-1]) op b); \
   } while (false)
 
   for (;;) {
@@ -429,8 +428,7 @@ static InterpretResult run(void) {
           concatenate();
         } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
           double b = AS_NUMBER(pop());
-          double a = AS_NUMBER(pop());
-          push(NUMBER_VAL(a + b));
+          vm.stackTop[-1] = NUMBER_VAL(AS_NUMBER(vm.stackTop[-1]) + b);
         } else {
           runtimeError("Operands must be two numbers or two strings.");
           return INTERPRET_RUNTIME_ERROR;
