@@ -71,12 +71,14 @@ typedef struct Compiler {
 
 typedef struct ClassCompiler {
   struct ClassCompiler* enclosing;
+  Token name;
   bool hasSuperclass;
 } ClassCompiler;
 
 Parser parser;
 Compiler* current = NULL;
 ClassCompiler* currentClass = NULL;
+bool thisAccess = false;
 
 static Chunk* currentChunk() {
   return &current->function->chunk;
@@ -91,6 +93,7 @@ static void errorAt(Token* token, const char* message);
 static void emitReturn();
 static uint8_t makeConstant(Value value);
 static uint8_t identifierConstant(Token* name);
+static uint8_t fieldConstant(Token* className, Token* field);
 static void emitConstant(Value value);
 static void initCompiler(Compiler* compiler, FunctionType type);
 static int resolveLocal(Compiler* compiler, Token* name);
@@ -318,13 +321,25 @@ static void and_(bool canAssign) {
 }
 
 static void dot(bool canAssign) {
+  bool wasThis = thisAccess;
+  thisAccess = false;
+
   consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
-  uint8_t name = identifierConstant(&parser.previous);
+  Token field = parser.previous;
+
+  bool mangle = wasThis && currentClass != NULL;
+  uint8_t plainName = 0;
+  bool plainBuilt = false;
 
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
+    uint8_t name = mangle ? fieldConstant(&currentClass->name, &field) : identifierConstant(&field);
     emitBytes(OP_SET_PROPERTY, name);
   } else if (match(TOKEN_LEFT_PAREN)) {
+    if (!plainBuilt) {
+      plainName = identifierConstant(&field);
+      plainBuilt = true;
+    }
     uint8_t argCount = 0;
     if (!check(TOKEN_RIGHT_PAREN)) {
       do {
@@ -334,9 +349,10 @@ static void dot(bool canAssign) {
       } while (match(TOKEN_COMMA));
     }
     consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
-    emitBytes(OP_INVOKE, name);
+    emitBytes(OP_INVOKE, plainName);
     emitByte(argCount);
   } else {
+    uint8_t name = mangle ? fieldConstant(&currentClass->name, &field) : identifierConstant(&field);
     emitBytes(OP_GET_PROPERTY, name);
   }
 }
@@ -416,6 +432,16 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
 
 static uint8_t identifierConstant(Token* name) {
   return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
+}
+
+static uint8_t fieldConstant(Token* className, Token* field) {
+  int length = className->length + 1 + field->length;
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, className->start, className->length);
+  chars[className->length] = '$';
+  memcpy(chars + className->length + 1, field->start, field->length);
+  chars[length] = '\0';
+  return makeConstant(OBJ_VAL(takeString(chars, length)));
 }
 
 static void addLocal(Token name) {
@@ -523,6 +549,7 @@ static void this_(bool canAssign) {
     return;
   }
   variable(canAssign);
+  thisAccess = check(TOKEN_DOT);
 }
 
 static Token syntheticToken(const char* text) {
@@ -703,6 +730,7 @@ static void classDeclaration() {
 
   ClassCompiler classCompiler;
   classCompiler.enclosing = currentClass;
+  classCompiler.name = className;
   classCompiler.hasSuperclass = false;
   currentClass = &classCompiler;
 
